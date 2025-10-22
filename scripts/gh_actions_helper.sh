@@ -269,13 +269,13 @@ check_latest_status() {
     local latest_run
     latest_run=$(gh run list --limit 1 --json status,conclusion)
 
-    local status
-    status=$(echo "$latest_run" | jq -r '.[0].status')
+    local run_status
+    run_status=$(echo "$latest_run" | jq -r '.[0].status')
 
     local conclusion
     conclusion=$(echo "$latest_run" | jq -r '.[0].conclusion')
 
-    echo "Status: $status"
+    echo "Status: $run_status"
     echo "Conclusion: $conclusion"
 
     case "$conclusion" in
