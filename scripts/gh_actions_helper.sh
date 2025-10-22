@@ -295,18 +295,4 @@ check_latest_status() {
     esac
 }
 
-# Export functions if being sourced
-if [ "${BASH_SOURCE[0]}" != "${0}" ]; then
-    export -f check_gh_cli
-    export -f detect_github_repo
-    export -f check_github_actions_enabled
-    export -f check_github_actions_repo
-    export -f get_latest_run_for_commit
-    export -f get_failed_runs
-    export -f analyze_failure_logs
-    export -f get_run_summary
-    export -f list_workflows
-    export -f get_recent_runs
-    export -f get_current_commit_run
-    export -f check_latest_status
-fi
+# Functions are available when sourced (no export needed for bash/zsh)
