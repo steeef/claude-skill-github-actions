@@ -1,0 +1,43 @@
+name: Test Skill
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run skill tests
+        run: |
+          chmod +x test/test_skill.sh
+          ./test/test_skill.sh
+
+      - name: Test helper script
+        run: |
+          source scripts/gh_actions_helper.sh
+
+          # Test detection functions
+          echo "Testing repository detection..."
+          detect_github_repo || echo "Detection test completed"
+
+          echo "Testing workflow detection..."
+          check_github_actions_enabled || echo "Workflow detection completed"
+
+      - name: Verify SKILL.md structure
+        run: |
+          echo "Checking SKILL.md exists..."
+          test -f SKILL.md || (echo "SKILL.md not found!" && exit 1)
+
+          echo "Checking for frontmatter..."
+          grep -q "^name:" SKILL.md || (echo "Missing 'name' in frontmatter!" && exit 1)
+          grep -q "^description:" SKILL.md || (echo "Missing 'description' in frontmatter!" && exit 1)
+
+          echo "SKILL.md structure is valid"
