@@ -3,7 +3,110 @@
 # GitHub Actions Helper Script
 # Utility functions for detecting and working with GitHub Actions
 
-# Check if gh CLI is available
+# Get current authenticated gh account
+get_gh_account() {
+    gh api user --jq '.login' 2>/dev/null
+}
+
+# Get all authenticated accounts
+# Returns: JSON array of account info with username and host
+get_all_gh_accounts() {
+    gh auth status 2>&1 | grep -E "Logged in to .* account" | sed -E 's/.*account ([^ ]+).*/\1/'
+}
+
+# Prompt user to switch accounts
+# Args: $1 = owner/repo that needs access
+# Returns: 0 if switched successfully, 1 otherwise
+prompt_account_switch() {
+    local owner_repo="$1"
+    local current_account
+    current_account=$(get_gh_account)
+
+    echo "Current account '$current_account' cannot access '$owner_repo'" >&2
+    echo "" >&2
+
+    # Get list of available accounts
+    local available_accounts
+    available_accounts=$(get_all_gh_accounts)
+
+    if [ -z "$available_accounts" ]; then
+        echo "No other authenticated accounts found." >&2
+        echo "Run: gh auth login" >&2
+        return 1
+    fi
+
+    local account_count
+    account_count=$(echo "$available_accounts" | wc -l | tr -d ' ')
+
+    if [ "$account_count" -eq 1 ]; then
+        echo "Only one account is authenticated. You may need to login with a different account." >&2
+        echo "Run: gh auth login" >&2
+        return 1
+    fi
+
+    echo "Available accounts:" >&2
+    echo "$available_accounts" | nl -w2 -s'. ' >&2
+    echo "" >&2
+
+    # Prompt for account selection
+    read -p "Select an account to switch to (1-$account_count, or 'n' to skip): " selection >&2
+
+    if [ "$selection" = "n" ] || [ "$selection" = "N" ]; then
+        echo "Skipping account switch." >&2
+        return 1
+    fi
+
+    if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt "$account_count" ]; then
+        echo "Invalid selection." >&2
+        return 1
+    fi
+
+    # Get selected account
+    local selected_account
+    selected_account=$(echo "$available_accounts" | sed -n "${selection}p")
+
+    echo "Switching to account: $selected_account" >&2
+
+    # Switch account (gh auth switch prompts interactively)
+    if gh auth switch -u "$selected_account" &> /dev/null; then
+        echo "Successfully switched to $selected_account" >&2
+
+        # Verify access with new account
+        if check_repo_access "$owner_repo"; then
+            echo "✓ Account $selected_account has access to $owner_repo" >&2
+            return 0
+        else
+            echo "⚠ Account $selected_account still cannot access $owner_repo" >&2
+            return 1
+        fi
+    else
+        echo "Failed to switch to $selected_account" >&2
+        return 1
+    fi
+}
+
+# Check if current account has access to the repository
+# Args: $1 = owner/repo (optional, defaults to current repo)
+# Returns: 0 if access granted, 1 if denied, 2 if can't determine
+check_repo_access() {
+    local owner_repo="$1"
+
+    if [ -z "$owner_repo" ]; then
+        owner_repo=$(detect_github_repo 2>/dev/null)
+        if [ $? -ne 0 ]; then
+            return 2
+        fi
+    fi
+
+    # Try to access the repo - if we get a valid response, we have access
+    if gh api "repos/$owner_repo" &> /dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check if gh CLI is available and has proper authentication
 check_gh_cli() {
     if ! command -v gh &> /dev/null; then
         echo "Error: gh CLI is not installed" >&2
@@ -15,6 +118,42 @@ check_gh_cli() {
         echo "Error: gh is not authenticated" >&2
         echo "Run: gh auth login" >&2
         return 1
+    fi
+
+    # Check if we're in a git repo and validate access
+    local owner_repo
+    owner_repo=$(detect_github_repo 2>/dev/null)
+
+    if [ $? -eq 0 ]; then
+        # We're in a GitHub repo, verify access
+        if ! check_repo_access "$owner_repo"; then
+            # Check if we're in an interactive terminal
+            if [ -t 0 ] && [ -t 1 ]; then
+                # Interactive mode - prompt to switch accounts
+                echo "" >&2
+                if prompt_account_switch "$owner_repo"; then
+                    # Successfully switched to account with access
+                    return 0
+                fi
+            else
+                # Non-interactive mode - just show error
+                local current_account
+                current_account=$(get_gh_account)
+
+                echo "Error: Current gh account '$current_account' does not have access to '$owner_repo'" >&2
+                echo "" >&2
+                echo "This may be because:" >&2
+                echo "  - The repository is in an organization you don't have access to" >&2
+                echo "  - You're authenticated with the wrong GitHub account" >&2
+                echo "  - The repository is private and you lack permissions" >&2
+                echo "" >&2
+                echo "To fix this:" >&2
+                echo "  1. Check available accounts: gh auth status" >&2
+                echo "  2. Switch accounts: gh auth switch" >&2
+                echo "  3. Or login with correct account: gh auth login" >&2
+            fi
+            return 1
+        fi
     fi
 
     return 0
