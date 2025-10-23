@@ -24,6 +24,50 @@ which gh
 
 If `gh` is not available, inform the user that the GitHub CLI (`gh`) is required and provide installation instructions for their platform.
 
+### Authentication and Access
+
+Before proceeding, verify that `gh` is authenticated **with the correct account** that has access to the repository:
+
+```bash
+# Check current authentication status
+gh auth status
+
+# Verify which account is active
+gh api user --jq '.login'
+```
+
+**IMPORTANT**: If the repository is in an organization (e.g., `organization/repo`), ensure the authenticated account has access to that organization.
+
+#### Interactive Account Switching
+
+The `check_gh_cli()` function automatically validates repo access and, when running in an interactive terminal:
+- Detects if current account lacks access to the repository
+- Lists all available authenticated accounts
+- Prompts you to select and switch to the correct account
+- Verifies the selected account has access
+- Automatically proceeds if access is granted
+
+**Example interactive session:**
+```
+Current account 'personal-user' cannot access 'company/private-repo'
+
+Available accounts:
+ 1. personal-user
+ 2. work-user
+
+Select an account to switch to (1-2, or 'n' to skip): 2
+Switching to account: work-user
+Successfully switched to work-user
+✓ Account work-user has access to company/private-repo
+```
+
+In non-interactive environments (scripts, CI/CD), the function will display an error message with manual instructions instead of prompting.
+
+Common authentication issues:
+- **Wrong account**: Authenticated with personal account but repo is in organization
+- **Multiple accounts**: Need to switch to the right one using `gh auth switch`
+- **Missing permissions**: Account lacks access to private repo or organization
+
 ## Step 1: Detect GitHub Repository
 
 Check if the current directory is a GitHub repository:
@@ -180,14 +224,35 @@ analyze_failure_logs "$RUN_ID"
 ## Error Handling
 
 ### `gh` not authenticated
-```
+```bash
 gh auth status
 ```
 
 If not authenticated:
-```
+```bash
 gh auth login
 ```
+
+### Wrong account or insufficient access
+
+If you see errors like `HTTP 404: Not Found` when accessing organization repositories:
+
+```bash
+# Check which account is currently active
+gh auth status
+gh api user --jq '.login'
+
+# List all authenticated accounts
+gh auth status --show-token=false
+
+# Switch to a different account
+gh auth switch
+
+# Or login with the correct account
+gh auth login
+```
+
+The `check_gh_cli()` helper function will detect this automatically and provide specific guidance about which account you're using and what's needed.
 
 ### Rate limiting
 GitHub API has rate limits. Check status:

@@ -239,6 +239,120 @@ test_helper_script_executable() {
     fi
 }
 
+# Test 11: Test get_gh_account function
+test_get_gh_account() {
+    print_test "Test get_gh_account function"
+
+    if ! command -v gh &> /dev/null; then
+        echo "Skipping - gh not installed"
+        return 0
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        echo "Skipping - gh not authenticated"
+        return 0
+    fi
+
+    # Source the helper script
+    source "$SKILL_ROOT/scripts/gh_actions_helper.sh"
+
+    local account
+    account=$(get_gh_account)
+
+    if [ -n "$account" ]; then
+        pass "Successfully retrieved gh account: $account"
+        return 0
+    else
+        fail "Failed to retrieve gh account"
+        return 1
+    fi
+}
+
+# Test 12: Test check_repo_access with valid repo
+test_check_repo_access_public() {
+    print_test "Test repo access check with public repo"
+
+    if ! command -v gh &> /dev/null; then
+        echo "Skipping - gh not installed"
+        return 0
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        echo "Skipping - gh not authenticated"
+        return 0
+    fi
+
+    # Source the helper script
+    source "$SKILL_ROOT/scripts/gh_actions_helper.sh"
+
+    # Test with a known public repo
+    if check_repo_access "cli/cli"; then
+        pass "Successfully verified access to public repo"
+        return 0
+    else
+        fail "Should have access to public repo cli/cli"
+        return 1
+    fi
+}
+
+# Test 13: Test check_repo_access with invalid repo
+test_check_repo_access_invalid() {
+    print_test "Test repo access check with invalid repo"
+
+    if ! command -v gh &> /dev/null; then
+        echo "Skipping - gh not installed"
+        return 0
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        echo "Skipping - gh not authenticated"
+        return 0
+    fi
+
+    # Source the helper script
+    source "$SKILL_ROOT/scripts/gh_actions_helper.sh"
+
+    # Test with a repo that doesn't exist
+    if ! check_repo_access "this-user-does-not-exist-12345/this-repo-does-not-exist-12345" 2>/dev/null; then
+        pass "Correctly detected no access to non-existent repo"
+        return 0
+    else
+        fail "Should not have access to non-existent repo"
+        return 1
+    fi
+}
+
+# Test 14: Test get_all_gh_accounts function
+test_get_all_accounts() {
+    print_test "Test get_all_gh_accounts function"
+
+    if ! command -v gh &> /dev/null; then
+        echo "Skipping - gh not installed"
+        return 0
+    fi
+
+    if ! gh auth status &> /dev/null; then
+        echo "Skipping - gh not authenticated"
+        return 0
+    fi
+
+    # Source the helper script
+    source "$SKILL_ROOT/scripts/gh_actions_helper.sh"
+
+    local accounts
+    accounts=$(get_all_gh_accounts)
+
+    if [ -n "$accounts" ]; then
+        local count
+        count=$(echo "$accounts" | wc -l | tr -d ' ')
+        pass "Successfully retrieved $count authenticated account(s)"
+        return 0
+    else
+        fail "Failed to retrieve authenticated accounts"
+        return 1
+    fi
+}
+
 # Main test execution
 main() {
     echo "======================================"
@@ -256,6 +370,10 @@ main() {
     test_empty_workflows_dir
     test_helper_script_exists
     test_helper_script_executable
+    test_get_gh_account
+    test_check_repo_access_public
+    test_check_repo_access_invalid
+    test_get_all_accounts
 
     # Print summary
     echo ""
